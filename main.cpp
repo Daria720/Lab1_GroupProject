@@ -18,14 +18,14 @@ int main() {
 
     // Call Student A algorithm
     auto resultA = calculateA(data);
-    auto [coeffsA, rmseA, timeA] = resultA;
+    auto [coeffsA, rmseA, timeA] = *resultA;
     std::cout << "[Student A - Linear Approximation]\n";
     std::cout << "Model: y = " << coeffsA[0] << " + " << coeffsA[1] << " x\n";
     std::cout << "RMSE: " << rmseA << " | Time: " << timeA << " ms\n\n";
 
     // Call Student B algorithm
     auto resultB = calculateB(data);
-    auto [coeffsB, rmseB, timeB] = resultB;
+    auto [coeffsB, rmseB, timeB] = *resultB;
     std::cout << "[Student B - Quadratic Approximation]\n";
     std::cout << "Model: y = " << coeffsB[0] << " + " << coeffsB[1] << " x + " << coeffsB[2] << " * x^2\n";
     std::cout << "RMSE: " << rmseB << " | Time: " << timeB << " ms\n\n";

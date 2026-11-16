@@ -1,125 +1,87 @@
 #include "shared_types.h"
-#include <array>
-#include <chrono>
 #include <cmath>
+#include <chrono>
+#include <vector>
+#include <array>
 #include <stdexcept>
-#include <utility>
+#include <algorithm>
 
-std::unique_ptr<Result> calculateB(std::shared_ptr<const InputData> data)
-{
-    if (!data || data->points.size() < 3)
-    {
-        throw std::invalid_argument("Quadratic approximation requires at least 3 points.");
+std::unique_ptr<Result> calculateB(std::shared_ptr<const InputData> data) {
+    auto start = std::chrono::high_resolution_clock::now();
+
+    if (!data || data->points.size() < 3) {
+        throw std::invalid_argument("Not enough points for quadratic approximation");
     }
 
-    const auto startTime = std::chrono::steady_clock::now();
+    const size_t n = data->points.size();
+    double sX = 0.0, sX2 = 0.0, sX3 = 0.0, sX4 = 0.0;
+    double sY = 0.0, sXY = 0.0, sX2Y = 0.0;
 
-    const std::size_t n = data->points.size();
-    double sx = 0.0, sx2 = 0.0, sx3 = 0.0, sx4 = 0.0;
-    double sy = 0.0, sxy = 0.0, sx2y = 0.0;
-    std::size_t ops = 0;
-
-    for (const auto& [x, y] : data->points)
-    {
-        const double x2 = x * x;
-        const double x3 = x2 * x;
-        const double x4 = x2 * x2;
-
-        sx += x;
-        sx2 += x2;
-        sx3 += x3;
-        sx4 += x4;
-
-        sy += y;
-        sxy += x * y;
-        sx2y += x2 * y;
-        ops += 12;
+    for (const auto& [x, y] : data->points) {
+        double x2 = x * x;
+        sX += x;
+        sX2 += x2;
+        sX3 += x2 * x;
+        sX4 += x2 * x2;
+        sY += y;
+        sXY += x * y;
+        sX2Y += x2 * y;
     }
 
-    const double nd = static_cast<double>(n);
+    // Augmented matrix for [a0, a1, a2]
+    std::array<std::array<double, 4>, 3> mat = { {
+        {static_cast<double>(n), sX,  sX2, sY},
+        {sX,                     sX2, sX3, sXY},
+        {sX2,                    sX3, sX4, sX2Y}
+    } };
 
-    std::array<std::array<double, 4>, 3> mat = {{
-        {nd,  sx,  sx2, sy},
-        {sx,  sx2, sx3, sxy},
-        {sx2, sx3, sx4, sx2y}
-    }};
-
-    for (std::size_t col = 0; col < 3; ++col)
-    {
-        std::size_t pivotRow = col;
-        for (std::size_t row = col + 1; row < 3; ++row)
-        {
-            if (std::abs(mat[row][col]) > std::abs(mat[pivotRow][col]))
-            {
-                pivotRow = row;
+    // Gaussian elimination with partial pivoting
+    for (int i = 0; i < 3; ++i) {
+        int maxRow = i;
+        for (int k = i + 1; k < 3; ++k) {
+            if (std::abs(mat[k][i]) > std::abs(mat[maxRow][i])) {
+                maxRow = k;
             }
         }
+        std::swap(mat[i], mat[maxRow]);
 
-        if (std::abs(mat[pivotRow][col]) < 1e-12)
-        {
-            throw std::runtime_error("Singular normal matrix in quadratic least squares.");
+        if (std::abs(mat[i][i]) < 1e-12) {
+            throw std::runtime_error("Singular matrix in quadratic least squares");
         }
 
-        if (pivotRow != col)
-        {
-            std::swap(mat[col], mat[pivotRow]);
-        }
-
-        for (std::size_t row = col + 1; row < 3; ++row)
-        {
-            const double factor = mat[row][col] / mat[col][col];
-            ops += 1;
-            for (std::size_t k = col; k < 4; ++k)
-            {
-                mat[row][k] -= factor * mat[col][k];
-                ops += 2;
+        for (int k = i + 1; k < 3; ++k) {
+            double factor = mat[k][i] / mat[i][i];
+            for (int j = i; j < 4; ++j) {
+                mat[k][j] -= factor * mat[i][j];
             }
         }
     }
 
-    std::array<double, 3> a{};
-    for (int i = 2; i >= 0; --i)
-    {
+    // Back substitution
+    std::vector<double> coeffs(3);
+    for (int i = 2; i >= 0; --i) {
         double sum = mat[i][3];
-        for (int j = i + 1; j < 3; ++j)
-        {
-            sum -= mat[i][j] * a[j];
-            ops += 2;
+        for (int j = i + 1; j < 3; ++j) {
+            sum -= mat[i][j] * coeffs[j];
         }
-        a[i] = sum / mat[i][i];
-        ops += 1;
+        coeffs[i] = sum / mat[i][i];
     }
 
-    const double meanY = sy / nd;
-    ops += 1;
-
-    double sqErrSum = 0.0;
-    double totSqSum = 0.0;
-
-    for (const auto& [x, y] : data->points)
-    {
-        const double yPred = a[0] + a[1] * x + a[2] * x * x;
-        const double err = y - yPred;
-        const double diffMean = y - meanY;
-        sqErrSum += err * err;
-        totSqSum += diffMean * diffMean;
-        ops += 11;
+    // Root Mean Square Error (RMSE)
+    double sqErrorSum = 0.0;
+    for (const auto& [x, y] : data->points) {
+        double yPred = coeffs[0] + coeffs[1] * x + coeffs[2] * x * x;
+        double diff = y - yPred;
+        sqErrorSum += diff * diff;
     }
+    double rmse = std::sqrt(sqErrorSum / n);
 
-    const double rmse = std::sqrt(sqErrSum / nd);
-    const double rSquared = (totSqSum > 1e-12) ? (1.0 - sqErrSum / totSqSum) : 1.0;
-    ops += 4;
+    auto end = std::chrono::high_resolution_clock::now();
+    double execTimeMs = std::chrono::duration<double, std::milli>(end - start).count();
 
-    const auto endTime = std::chrono::steady_clock::now();
-    const double elapsedUs = std::chrono::duration<double, std::micro>(endTime - startTime).count();
-
-    auto res = std::make_unique<Result>();
-    res->modelName = "Quadratic Least Squares: y = a0 + a1*x + a2*x^2";
-    res->coefficients = {a[0], a[1], a[2]};
-    res->rmse = rmse;
-    res->rSquared = rSquared;
-    res->operationsCount = ops;
-    res->executionTimeUs = elapsedUs;
-
-    return res;
+    return std::make_unique<Result>(Result{
+        coeffs,
+        rmse,
+        execTimeMs
+        });
 }
