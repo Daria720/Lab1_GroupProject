@@ -1,4 +1,5 @@
 #include <iostream>
+#include <iomanip>
 #include "shared_types.h"
 
 int main() {
@@ -13,7 +14,15 @@ int main() {
         }
         });
 
-    std::cout << "Project initialized successfully. Points count: " << data->points.size() << "\n";
+    std::cout << std::fixed << std::setprecision(4);
+
+    //Початок спільної ділянки для виклику алгоритмів (для контрольованого конфлікту)
+    auto resultA = calculateA(data);
+    auto [coeffsA, rmseA, timeA] = *resultA;
+    std::cout << "[Student A - Linear Approximation]\n";
+    std::cout << "Model: y = " << coeffsA[0] << " + " << coeffsA[1] << " * x\n";
+    std::cout << "RMSE: " << rmseA << " | Time: " << timeA << " ms\n\n";
+    //Кінець спільної ділянки
 
     return 0;
 }
