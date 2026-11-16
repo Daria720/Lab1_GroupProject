@@ -16,13 +16,13 @@ int main() {
 
     std::cout << std::fixed << std::setprecision(4);
 
-    //Початок спільної ділянки для виклику алгоритмів (для контрольованого конфлікту)
+    // Shared section for algorithm calls (controlled conflict)
     auto resultA = calculateA(data);
     auto [coeffsA, rmseA, timeA] = *resultA;
     std::cout << "[Student A - Linear Approximation]\n";
     std::cout << "Model: y = " << coeffsA[0] << " + " << coeffsA[1] << " * x\n";
     std::cout << "RMSE: " << rmseA << " | Time: " << timeA << " ms\n\n";
-    //Кінець спільної ділянки
+    //End of shared section
 
     return 0;
 }
